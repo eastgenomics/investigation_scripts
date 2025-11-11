@@ -211,7 +211,7 @@ def remove_repeat_samples(df):
     # save unique id TruQ7A-TruQ7A
     df_all_repeats_removed=pd.concat([df_exclude_repeats_ending_with_A, df_no_repeats[df_no_repeats['sample_id']== 'TruQ7A-TruQ7A']])
     return df_all_repeats_removed
-  
+
 def remove_outliers(df , keep_male_outliers):
     """
     Reads a dataframe with unique samples and removes outliers which are visualised outside the box and whiskers plot.
@@ -235,6 +235,17 @@ def remove_outliers(df , keep_male_outliers):
         df_without_female_outlier=df[~(df['sample_id'] == '133214140-24296K0004') ]                       
         return df_without_female_outlier 
 
+def round_thresholds(df):
+    """
+    return rounded thresholds
+    """
+    threshold=mean_and_sd_male_and_female_y_score(df)
+    female=threshold['female_minus_3sd']
+    male=threshold['male_plus_3sd']
+    female=round(female,2)
+    male=round(male,2)
+    return female, male
+
 def main():
     args = parse_arguments()
     # read in samples,validation tsv 
@@ -249,49 +260,49 @@ def main():
     score_plot=remove_repeat_samples(score_plot)
     num_samples_postfilter_repeats=len(score_plot)
     score_plot.to_csv('new_panel_all_unique_samples_score_plot.csv')
-    # sense check filer of repeats
+
+    # sense check fiilter of repeats
     print('Number of samples after filtering for repeats', len(score_plot),sep=':')  
 
     # sense check number of unknown samples
     print('Number of samples with reported sex as unknown:',len(score_plot[~((score_plot['reported_sex'] == 'M') | (score_plot['reported_sex'] == 'F'))]))
     score_plot_filtered=score_plot[(score_plot['reported_sex'] == 'M') | (score_plot['reported_sex'] == 'F')]
-    #sense check filter of unknown samples
     print('Number of samples reported male and female:',len(score_plot_filtered))   
 
-    # remove female outlier sample from dataframe 
-    df_without_female_outlier=remove_outliers(score_plot_filtered , keep_male_outliers=True)   
-
-    # remove female outlier only
-    if '133214140-24296K0004' not in df_without_female_outlier['sample_id']: 
-        print('Number of unique samples reported male or female after filtering for female outlier ',len(df_without_female_outlier),sep=':')  
-        # calculate thresholds
-        threshold=mean_and_sd_male_and_female_y_score(df_without_female_outlier)
-        female=threshold['female_minus_3sd']
-        male=threshold['male_plus_3sd']
-        female= round(female,2)
-        male=round(male,2)
-        #write out dataset used to calculate thresholds
-        df_without_female_outlier.to_csv('df_without_female_outlier.csv')
-        # plotting 
-        histo_score(df_without_female_outlier , 'without_female_outlier', male_threshold=male, female_threshold= female)
-        score_trend(df_without_female_outlier, 'without_female_outlier',male_threshold=male, female_threshold= female)
+    # plot data before outlier removal
+    print("\nBefore outlier removal")
+    female, male = round_thresholds(score_plot_filtered)
+    histo_score(score_plot_filtered, 'before outlier removal', male_threshold=male, female_threshold=female)
+    score_trend(score_plot_filtered, 'before outlier removal', male_threshold=male, female_threshold=female)
 
     # remove all outliers 
-    df_all_outliers_removed=remove_outliers(score_plot_filtered , keep_male_outliers=False)
-    print('Number of unique samples reported male or female after filtering for all outliers ',len(df_all_outliers_removed),sep=':') 
-    threshold=mean_and_sd_male_and_female_y_score(df_all_outliers_removed)
-    female=threshold['female_minus_3sd']
-    male=threshold['male_plus_3sd']
-    female= round(female,2)
-    male=round(male,2)
+    outlier_rule_1 = ((score_plot_filtered["reported_sex"] == "M") & (score_plot_filtered["score"] > 5.3))
+    outlier_rule_2 = ((score_plot_filtered["reported_sex"] == "M") & (score_plot_filtered["score"] < 4.4))
+    outlier_rule_3 = ((score_plot_filtered["reported_sex"] == "F") & (score_plot_filtered["score"] < 6.2))
+    df_all_outliers_removed = score_plot_filtered.loc[~(outlier_rule_1 | outlier_rule_2 | outlier_rule_3)] 
+
+    print("\nNumber of unique samples reported male or female after filtering for all outliers ", len(df_all_outliers_removed), sep=':')
     df_all_outliers_removed.to_csv('df_all_outliers_removed.csv')
     frequency={'count_total_sample':num_samples_prefilter,
         'count_unique_sample_count':num_samples_postfilter_repeats,
         'count_unique_samples_with_male_and_female':len(score_plot_filtered)}
     pd.DataFrame([frequency]).to_csv('frequency_samples.csv')
-    #plotting
-    histo_score(score_plot_filtered , 'without_outliers', male_threshold=male, female_threshold= female)
-    score_trend(score_plot_filtered, 'without_outliers',male_threshold=male, female_threshold= female)
+
+    print("\nRemoval of ALL outliers according to rules")
+    female, male = round_thresholds(df_all_outliers_removed)
+    histo_score(df_all_outliers_removed, 'without outliers', male_threshold=male, female_threshold=female)
+    score_trend(df_all_outliers_removed, 'without outliers', male_threshold=male, female_threshold=female)
+
+    ## Re-add outlier samples that we consider borderline
+    ### 138504418-25202K0022-25NGSHO40-5877-F-92197814	F	6.02210676030353	NA
+    ### 139937585-25290K0118-25NGSHO61-5877-M-92197814	M	5.350061897830797	NA
+    outliers_to_keep = ["138504418-25202K0022-25NGSHO40-5877-F-92197814","139937585-25290K0118-25NGSHO61-5877-M-92197814"]
+    df_outliers_to_keep = score_plot_filtered.loc[score_plot_filtered["samples"].isin(outliers_to_keep)]
+    df_outliers_readded = pd.concat([df_all_outliers_removed, df_outliers_to_keep])
+    print("\nReaddition of the two borderline samples after outlier removal")
+    female, male = round_thresholds(df_outliers_readded)
+    histo_score(df_outliers_readded, 'with borderlines readded', male_threshold=male, female_threshold=female)
+    score_trend(df_outliers_readded, 'with borderlines readded', male_threshold=male, female_threshold=female)
 
 if __name__ == "__main__":
     main()
