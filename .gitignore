@@ -222,3 +222,7 @@ __marimo__/
 *.gz
 *.zip
 *.bz2
+
+# data files
+*.csv
+*.tsv
