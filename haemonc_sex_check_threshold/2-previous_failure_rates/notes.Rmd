@@ -1,0 +1,94 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+```{r}
+raw_data <- read_csv("query.csv")
+```
+
+```{r}
+raw_data %>% head(5)
+```
+
+```{r}
+core <- raw_data %>% 
+  separate(col = project_name, 
+           into = c("project_code", "date", "instrument", "run_id", "flowcell_barcode", "assay"), 
+           sep = "_",
+           extra = "merge") %>%
+  mutate(date = as_date(date),
+         pred_sex = case_when(
+           predicted_sex == "male" ~ 1,
+           predicted_sex == "female" ~ 2,
+           TRUE ~ 0),
+         matched = sex == pred_sex)
+```
+
+```{r}
+mye <- core %>% filter(assay == "MYE")
+f_mye <- core %>% filter(sex == 2, assay == "MYE")
+```
+
+```{r}
+f_mye %>% summarise(m = round(mean(!matched)*100, 2))
+```
+
+```{r}
+f_mye %>% 
+  group_by(year(date), month(date)) %>% 
+  summarise(m = mean(!matched) * 100, n = n())
+```
+
+
+```{r}
+f_mye %>%
+  mutate(fd = floor_date(date, unit = "month")) %>%
+  group_by(fd) %>%
+  summarise(n_failures = sum(), rate = mean(matched)) %>%
+  ggplot(aes(x = fd, y = rate)) +
+  geom_bar(stat = "identity")
+  scale_x_date(date_breaks = "1 month")
+```
+
+```{r}
+post <- mye %>% filter(date > date("2025-04-01")) %>% pull(matched) %>% mean() %>% sum(., -1) %>% abs()
+pre <- mye %>% filter(date <= date("2025-04-01"), floor_date(date) != date("2025-10-01")) %>% pull(matched) %>% mean() %>% sum(., -1) %>% abs()
+fr <- mye %>%
+  filter(floor_date(date, unit = "month") != date("2024-10-01")) %>%
+  mutate(fd = floor_date(date, unit = "month")) %>%
+  group_by(fd) %>%
+  summarise(n_failures = n() - sum(), rate = mean(!matched)) %>%
+  mutate(method = ifelse(date(fd) < date("2025-04-01"), "somalier", "e_s_c"))
+
+fr %>%
+ggplot(aes(x = fd, y = rate)) +
+  geom_bar(stat = "identity", aes(fill = method)) +
+  # This means "before/after updated app"
+  geom_hline(yintercept = pre, colour = "blue") +
+  geom_hline(yintercept = post, colour = "red") +
+  scale_x_date(date_breaks = "1 month") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 0.9))
+```
+
+```{r}
+pre <- mye %>% filter(
+  date <= date("2025-04-01"),
+  date > date("2024-11-01")) %>%
+  pull(matched) %>% mean() %>% sum(., -1) %>% abs()
+
+fr %>%
+  filter(fd >= date("2024-11-01")) %>%
+  ggplot(aes(x = fd, y = rate)) +
+  geom_bar(stat = "identity", aes(fill = method)) +
+  # This means "before/after updated app"
+  geom_hline(yintercept = pre, colour = "blue") +
+  geom_hline(yintercept = post, colour = "red") +
+  scale_x_date(date_breaks = "1 month") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 0.9))
+```

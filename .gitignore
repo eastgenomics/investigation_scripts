@@ -1,3 +1,4 @@
+## Python
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +206,32 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# R
+.Rproj.user
+.Rhistory
+
+# renv
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock/
+renv/python/
+renv/sandbox/
+renv/staging/
+
+# rendered content
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.html
+
+# compressed files
+*.gz
+*.zip
+*.bz2
+
+# data files
+*.csv
+*.tsv
