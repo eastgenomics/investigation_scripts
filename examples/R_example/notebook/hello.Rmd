@@ -1,9 +1,0 @@
----
-title: "hello"
-output: html_document
-date: "2025-11-12"
----
-
-```{r}
-library(ggplot2)
-```
